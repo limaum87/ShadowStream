@@ -38,6 +38,11 @@ def load_stations():
     return stations
 
 
+def save_stations(stations):
+    with STATIONS_PATH.open("w", encoding="utf-8") as file:
+        json.dump(stations, file, ensure_ascii=False, indent=2)
+
+
 def get_station_by_url(url):
     for station in load_stations():
         if station["url"] == url:
@@ -74,7 +79,7 @@ def ensure_mpv_running():
             stderr=subprocess.DEVNULL,
         )
 
-        deadline = time.time() + 10
+        deadline = time.time() + 30
         while time.time() < deadline:
             if Path(MPV_SOCKET).exists():
                 return
@@ -203,6 +208,30 @@ class RequestHandler(BaseHTTPRequestHandler):
                 with STATE_LOCK:
                     STATE["volume"] = volume
                 return self.respond_json(refresh_state())
+
+            if parsed.path == "/api/stations":
+                name = body.get("name", "").strip()
+                url = body.get("url", "").strip()
+                if not name or not url:
+                    return self.respond_json({"error": "name and url required"}, HTTPStatus.BAD_REQUEST)
+                stations = load_stations()
+                if any(s["url"] == url for s in stations):
+                    return self.respond_json({"error": "station already exists"}, HTTPStatus.CONFLICT)
+                stations.append({"name": name, "url": url})
+                save_stations(stations)
+                return self.respond_json(refresh_state())
+
+            if parsed.path == "/api/stations/delete":
+                url = body.get("url", "").strip()
+                if not url:
+                    return self.respond_json({"error": "url required"}, HTTPStatus.BAD_REQUEST)
+                stations = load_stations()
+                filtered = [s for s in stations if s["url"] != url]
+                if len(filtered) == len(stations):
+                    return self.respond_json({"error": "station not found"}, HTTPStatus.NOT_FOUND)
+                save_stations(filtered)
+                return self.respond_json(refresh_state())
+
         except Exception as exc:
             set_error(str(exc))
             return self.respond_json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)

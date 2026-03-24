@@ -19,12 +19,15 @@ const elements = {
   pause: document.querySelector("#pause"),
   resume: document.querySelector("#resume"),
   stop: document.querySelector("#stop"),
+  newName: document.querySelector("#new-station-name"),
+  newUrl: document.querySelector("#new-station-url"),
+  addStation: document.querySelector("#add-station"),
 };
 
 init().catch((error) => {
   console.error(error);
-  setMessage("Could not initialize the remote control.");
-  setStatus("Error");
+  setMessage("Nao foi possivel inicializar o controle remoto.");
+  setStatus("Erro");
 });
 
 async function init() {
@@ -76,6 +79,23 @@ function bindEvents() {
       showError(error);
     }
   });
+  elements.addStation.addEventListener("click", async () => {
+    const name = elements.newName.value.trim();
+    const url = elements.newUrl.value.trim();
+    if (!name || !url) {
+      setMessage("Preencha o nome e a URL da estacao.");
+      return;
+    }
+    try {
+      await postJson("/api/stations", { name, url });
+      elements.newName.value = "";
+      elements.newUrl.value = "";
+      await loadStations();
+      setMessage(`Estacao "${name}" adicionada.`);
+    } catch (error) {
+      showError(error);
+    }
+  });
 }
 
 async function loadStations() {
@@ -85,11 +105,11 @@ async function loadStations() {
   state.selectedStation = state.stations[0] ?? null;
   renderStations();
   if (state.selectedStation) {
-    setMessage("Select a station and send playback to the Raspberry.");
-    setStatus("Ready");
+    setMessage("Selecione uma estacao e envie para o Raspberry.");
+    setStatus("Pronto");
   } else {
-    setMessage("No stations configured.");
-    setStatus("Empty");
+    setMessage("Nenhuma estacao configurada.");
+    setStatus("Vazio");
   }
 }
 
@@ -109,12 +129,27 @@ function renderStations() {
     url.className = "station-url";
     url.textContent = station.url;
 
-    button.append(name, url);
+    const removeBtn = document.createElement("span");
+    removeBtn.className = "station-remove";
+    removeBtn.textContent = "X";
+    removeBtn.title = "Remover estacao";
+    removeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await postJson("/api/stations/delete", { url: station.url });
+        await loadStations();
+        setMessage(`Estacao "${station.name}" removida.`);
+      } catch (error) {
+        showError(error);
+      }
+    });
+
+    button.append(name, url, removeBtn);
     button.addEventListener("click", () => {
       state.selectedStation = station;
       syncStationButtons();
-      setMessage(`${station.name} selected. Click Play Selected to start on the Raspberry.`);
-      setStatus("Ready");
+      setMessage(`${station.name} selecionada. Clique em Tocar para iniciar no Raspberry.`);
+      setStatus("Pronto");
     });
     elements.stationList.appendChild(button);
   }
@@ -141,24 +176,24 @@ function applyRemoteState(payload) {
   if (payload.current_station) {
     elements.currentStation.textContent = payload.current_station.name;
   } else {
-    elements.currentStation.textContent = "No station selected";
+    elements.currentStation.textContent = "Nenhuma estacao selecionada";
   }
 
   if (payload.error) {
-    setMessage(`Player error: ${payload.error}`);
-    setStatus("Error");
+    setMessage(`Erro no player: ${payload.error}`);
+    setStatus("Erro");
     return;
   }
 
   if (payload.playing) {
-    setMessage(`Playing ${payload.current_station?.name ?? "stream"} on the Raspberry output.`);
-    setStatus("Playing");
+    setMessage(`Tocando ${payload.current_station?.name ?? "stream"} na saida do Raspberry.`);
+    setStatus("Tocando");
   } else if (payload.current_station) {
-    setMessage(`${payload.current_station.name} loaded on the Raspberry and currently paused.`);
-    setStatus("Paused");
+    setMessage(`${payload.current_station.name} carregada no Raspberry, pausada.`);
+    setStatus("Pausado");
   } else {
-    setMessage("No active playback on the Raspberry.");
-    setStatus("Idle");
+    setMessage("Nenhuma reproducao ativa no Raspberry.");
+    setStatus("Parado");
   }
 }
 
@@ -170,7 +205,7 @@ async function postJson(url, body = {}) {
   });
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error || `Request failed with status ${response.status}`);
+    throw new Error(payload.error || `Requisicao falhou com status ${response.status}`);
   }
   applyRemoteState(payload);
 }
@@ -183,8 +218,8 @@ function syncStationButtons() {
 
 function showError(error) {
   console.error(error);
-  setMessage(error.message || "Command failed.");
-  setStatus("Error");
+  setMessage(error.message || "Comando falhou.");
+  setStatus("Erro");
 }
 
 function setMessage(message) {
