@@ -1,0 +1,143 @@
+:root {
+  color-scheme: light;
+  --surface: rgba(255, 252, 247, 0.84);
+  --surface-strong: #fffaf2;
+  --text: #1e1b16;
+  --muted: #6b6258;
+  --border: rgba(73, 56, 37, 0.14);
+  --accent: #c4512d;
+  --accent-strong: #962f16;
+  --shadow: 0 24px 60px rgba(76, 42, 12, 0.14);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top, rgba(255, 210, 156, 0.6), transparent 28%),
+    linear-gradient(160deg, #f6f0e5 0%, #f2e3c7 45%, #e2c9aa 100%);
+}
+.app-shell {
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 48px 0 56px;
+}
+.hero, .player-card, .stations-card {
+  backdrop-filter: blur(14px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.hero { padding: 32px; margin-bottom: 24px; }
+.player-card, .stations-card { padding: 24px; }
+.player-card { margin-bottom: 24px; }
+.eyebrow, .label {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.hero h1, .stations-title-row h2, .station-header h2 { margin: 0; }
+.hero-copy {
+  max-width: 58ch;
+  margin: 16px 0 0;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.station-header, .controls, .stations-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.controls {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin: 24px 0 20px;
+}
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary-button {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #fff8f3;
+}
+.secondary-button {
+  background: #efe3d4;
+  color: var(--text);
+}
+.volume-control {
+  display: grid;
+  gap: 10px;
+  max-width: 360px;
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.message {
+  min-height: 24px;
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+.status-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #efe3d4;
+  color: var(--text);
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+.station-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.station-button {
+  width: 100%;
+  text-align: left;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-strong);
+  color: var(--text);
+}
+.station-button.active {
+  outline: 2px solid rgba(196, 81, 45, 0.25);
+  background: #fff3e6;
+}
+.station-name {
+  display: block;
+  font-size: 1rem;
+}
+.station-url {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  word-break: break-all;
+}
+@media (max-width: 640px) {
+  .app-shell {
+    width: min(100%, calc(100% - 20px));
+    padding: 20px 0 28px;
+  }
+  .hero, .player-card, .stations-card { border-radius: 20px; }
+  .station-header, .controls, .stations-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .controls button { width: 100%; }
+}

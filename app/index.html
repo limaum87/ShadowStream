@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Raspberry Radio Control</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Remote Control</p>
+        <h1>Raspberry Radio Output</h1>
+        <p class="hero-copy">This page controls audio playback on the Raspberry itself. Whoever opens this page only sends commands; the sound should come out of the Raspberry sound card.</p>
+      </section>
+
+      <section class="player-card" aria-label="Playback controls">
+        <div class="station-header">
+          <div>
+            <p class="label">Current output</p>
+            <h2 id="current-station">No station selected</h2>
+          </div>
+          <span class="status-pill" id="status-pill">Idle</span>
+        </div>
+
+        <div class="controls">
+          <button id="play-selected" class="primary-button" type="button">Play Selected</button>
+          <button id="pause" class="secondary-button" type="button">Pause</button>
+          <button id="resume" class="secondary-button" type="button">Resume</button>
+          <button id="stop" class="secondary-button" type="button">Stop</button>
+        </div>
+
+        <label class="volume-control" for="volume">
+          <span>Hardware output volume</span>
+          <input id="volume" type="range" min="0" max="100" step="1" value="80">
+        </label>
+
+        <p id="message" class="message" role="status">Loading station list...</p>
+      </section>
+
+      <section class="stations-card" aria-label="Stations">
+        <div class="stations-title-row">
+          <div>
+            <p class="label">Stations</p>
+            <h2>Available Streams</h2>
+          </div>
+        </div>
+        <div id="station-list" class="station-list"></div>
+      </section>
+    </main>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
