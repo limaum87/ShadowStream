@@ -1,58 +1,89 @@
 <!doctype html>
-<html lang="pt-BR">
+<html class="dark" lang="pt-BR">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Raspberry Radio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
+
+    <!-- Header -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <span class="material-symbols-outlined icon-brand">graphic_eq</span>
+        <h1 class="brand">RADIO.OS</h1>
+      </div>
+      <div class="top-bar-right">
+        <span class="material-symbols-outlined icon-muted">sensors</span>
+        <span class="live-dot" id="live-dot"></span>
+      </div>
+    </header>
+
     <main class="app-shell">
-      <section class="hero">
-        <p class="eyebrow">Controle Remoto</p>
-        <h1>Raspberry Radio</h1>
-        <p class="hero-copy">Esta pagina controla a reproducao de audio no Raspberry. Quem abre esta pagina apenas envia comandos; o som sai pela placa de audio do Raspberry.</p>
+
+      <!-- Now Playing -->
+      <section class="now-playing-card">
+        <div class="np-inner">
+          <div class="np-info">
+            <p class="label-micro" id="status-pill">Parado</p>
+            <h2 class="np-title" id="current-station">Nenhuma estacao selecionada</h2>
+            <p class="np-meta label-micro" id="stream-meta">--</p>
+          </div>
+
+          <!-- Controls -->
+          <div class="controls-row">
+            <button id="stop" class="ctrl-btn" type="button" title="Parar">
+              <span class="material-symbols-outlined">stop</span>
+            </button>
+            <button id="play-selected" class="ctrl-btn ctrl-play" type="button" title="Tocar">
+              <span class="material-symbols-outlined filled">play_arrow</span>
+            </button>
+            <button id="pause" class="ctrl-btn" type="button" title="Pausar">
+              <span class="material-symbols-outlined">pause</span>
+            </button>
+            <button id="resume" class="ctrl-btn" type="button" title="Retomar" style="display:none">
+              <span class="material-symbols-outlined filled">play_arrow</span>
+            </button>
+          </div>
+
+          <!-- Volume -->
+          <div class="volume-row">
+            <span class="material-symbols-outlined icon-muted vol-icon">volume_down</span>
+            <div class="volume-track-wrapper">
+              <input id="volume" type="range" min="0" max="100" step="1" value="80">
+            </div>
+            <span class="material-symbols-outlined icon-primary vol-icon">volume_up</span>
+          </div>
+        </div>
+        <div class="np-glow"></div>
       </section>
 
-      <section class="player-card" aria-label="Controles de reproducao">
-        <div class="station-header">
-          <div>
-            <p class="label">Tocando agora</p>
-            <h2 id="current-station">Nenhuma estacao selecionada</h2>
-          </div>
-          <span class="status-pill" id="status-pill">Parado</span>
-        </div>
+      <!-- Message -->
+      <p id="message" class="message" role="status">Carregando lista de estacoes...</p>
 
-        <div class="controls">
-          <button id="play-selected" class="primary-button" type="button">Tocar</button>
-          <button id="pause" class="secondary-button" type="button">Pausar</button>
-          <button id="resume" class="secondary-button" type="button">Retomar</button>
-          <button id="stop" class="secondary-button" type="button">Parar</button>
-        </div>
-
-        <label class="volume-control" for="volume">
-          <span>Volume da saida de audio</span>
-          <input id="volume" type="range" min="0" max="100" step="1" value="80">
-        </label>
-
-        <p id="message" class="message" role="status">Carregando lista de estacoes...</p>
-      </section>
-
-      <section class="stations-card" aria-label="Estacoes">
-        <div class="stations-title-row">
-          <div>
-            <p class="label">Estacoes</p>
-            <h2>Streams Disponiveis</h2>
-          </div>
+      <!-- Station List -->
+      <section class="streams-section">
+        <div class="streams-header">
+          <h3 class="section-title">Estacoes Disponiveis</h3>
+          <span class="station-count" id="station-count">0 online</span>
         </div>
         <div id="station-list" class="station-list"></div>
+
+        <!-- Add Station -->
         <div class="add-station-form">
-          <input id="new-station-name" type="text" placeholder="Nome da estacao">
-          <input id="new-station-url" type="text" placeholder="URL do stream">
-          <button id="add-station" class="primary-button" type="button">Adicionar</button>
+          <input id="new-station-name" type="text" placeholder="Nome da estacao" class="glass-input">
+          <input id="new-station-url" type="text" placeholder="URL do stream" class="glass-input">
+          <button id="add-station" class="ctrl-btn ctrl-add" type="button" title="Adicionar">
+            <span class="material-symbols-outlined">add</span>
+          </button>
         </div>
       </section>
+
     </main>
+
     <script src="./app.js" type="module"></script>
   </body>
 </html>

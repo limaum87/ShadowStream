@@ -14,6 +14,9 @@ const elements = {
   message: document.querySelector("#message"),
   stationList: document.querySelector("#station-list"),
   statusPill: document.querySelector("#status-pill"),
+  stationCount: document.querySelector("#station-count"),
+  streamMeta: document.querySelector("#stream-meta"),
+  liveDot: document.querySelector("#live-dot"),
   volume: document.querySelector("#volume"),
   playSelected: document.querySelector("#play-selected"),
   pause: document.querySelector("#pause"),
@@ -35,49 +38,31 @@ async function init() {
   await loadStations();
   await refreshStatus();
   window.setInterval(async () => {
-    try {
-      await refreshStatus();
-    } catch (error) {
-      showError(error);
-    }
+    try { await refreshStatus(); }
+    catch (error) { showError(error); }
   }, 5000);
 }
 
 function bindEvents() {
   elements.playSelected.addEventListener("click", async () => {
-    try {
-      await playSelectedStation();
-    } catch (error) {
-      showError(error);
-    }
+    try { await playSelectedStation(); }
+    catch (error) { showError(error); }
   });
   elements.pause.addEventListener("click", async () => {
-    try {
-      await postJson("/api/pause");
-    } catch (error) {
-      showError(error);
-    }
+    try { await postJson("/api/pause"); }
+    catch (error) { showError(error); }
   });
   elements.resume.addEventListener("click", async () => {
-    try {
-      await postJson("/api/resume");
-    } catch (error) {
-      showError(error);
-    }
+    try { await postJson("/api/resume"); }
+    catch (error) { showError(error); }
   });
   elements.stop.addEventListener("click", async () => {
-    try {
-      await postJson("/api/stop");
-    } catch (error) {
-      showError(error);
-    }
+    try { await postJson("/api/stop"); }
+    catch (error) { showError(error); }
   });
   elements.volume.addEventListener("change", async (event) => {
-    try {
-      await postJson("/api/volume", { volume: Number(event.target.value) });
-    } catch (error) {
-      showError(error);
-    }
+    try { await postJson("/api/volume", { volume: Number(event.target.value) }); }
+    catch (error) { showError(error); }
   });
   elements.addStation.addEventListener("click", async () => {
     const name = elements.newName.value.trim();
@@ -103,12 +88,13 @@ async function loadStations() {
   const payload = await response.json();
   state.stations = payload.stations ?? [];
   state.selectedStation = state.stations[0] ?? null;
+  elements.stationCount.textContent = `${state.stations.length} online`;
   renderStations();
   if (state.selectedStation) {
     setMessage("Selecione uma estacao e envie para o Raspberry.");
     setStatus("Pronto");
   } else {
-    setMessage("Nenhuma estacao configurada.");
+    setMessage("Nenhuma estacao configurada. Adicione uma abaixo.");
     setStatus("Vazio");
   }
 }
@@ -121,17 +107,32 @@ function renderStations() {
     button.className = "station-button";
     button.dataset.url = station.url;
 
+    // Icon
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "station-icon-wrap";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "radio";
+    iconWrap.appendChild(icon);
+
+    // Text
+    const textWrap = document.createElement("div");
+    textWrap.className = "station-text";
     const name = document.createElement("span");
     name.className = "station-name";
     name.textContent = station.name;
-
     const url = document.createElement("span");
     url.className = "station-url";
     url.textContent = station.url;
+    textWrap.append(name, url);
 
+    // Remove
     const removeBtn = document.createElement("span");
     removeBtn.className = "station-remove";
-    removeBtn.textContent = "X";
+    const removeIcon = document.createElement("span");
+    removeIcon.className = "material-symbols-outlined";
+    removeIcon.textContent = "close";
+    removeBtn.appendChild(removeIcon);
     removeBtn.title = "Remover estacao";
     removeBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -144,11 +145,11 @@ function renderStations() {
       }
     });
 
-    button.append(name, url, removeBtn);
+    button.append(iconWrap, textWrap, removeBtn);
     button.addEventListener("click", () => {
       state.selectedStation = station;
       syncStationButtons();
-      setMessage(`${station.name} selecionada. Clique em Tocar para iniciar no Raspberry.`);
+      setMessage(`${station.name} selecionada. Clique em Tocar.`);
       setStatus("Pronto");
     });
     elements.stationList.appendChild(button);
@@ -157,9 +158,7 @@ function renderStations() {
 }
 
 async function playSelectedStation() {
-  if (!state.selectedStation) {
-    return;
-  }
+  if (!state.selectedStation) return;
   await postJson("/api/play", { url: state.selectedStation.url });
 }
 
@@ -175,8 +174,10 @@ function applyRemoteState(payload) {
 
   if (payload.current_station) {
     elements.currentStation.textContent = payload.current_station.name;
+    elements.streamMeta.textContent = "Streaming";
   } else {
     elements.currentStation.textContent = "Nenhuma estacao selecionada";
+    elements.streamMeta.textContent = "--";
   }
 
   if (payload.error) {
@@ -185,14 +186,21 @@ function applyRemoteState(payload) {
     return;
   }
 
-  if (payload.playing) {
+  const isPlaying = payload.playing;
+  elements.liveDot.classList.toggle("inactive", !isPlaying);
+
+  // Update active station in list with playing bars
+  syncStationButtons();
+
+  if (isPlaying) {
     setMessage(`Tocando ${payload.current_station?.name ?? "stream"} na saida do Raspberry.`);
-    setStatus("Tocando");
+    setStatus("Ao Vivo");
+    elements.streamMeta.textContent = "Streaming ao vivo";
   } else if (payload.current_station) {
-    setMessage(`${payload.current_station.name} carregada no Raspberry, pausada.`);
+    setMessage(`${payload.current_station.name} pausada.`);
     setStatus("Pausado");
   } else {
-    setMessage("Nenhuma reproducao ativa no Raspberry.");
+    setMessage("Nenhuma reproducao ativa.");
     setStatus("Parado");
   }
 }
@@ -211,8 +219,29 @@ async function postJson(url, body = {}) {
 }
 
 function syncStationButtons() {
+  const playingUrl = state.remote.playing ? state.remote.current_station?.url : null;
   for (const button of elements.stationList.querySelectorAll(".station-button")) {
-    button.classList.toggle("active", button.dataset.url === state.selectedStation?.url);
+    const isSelected = button.dataset.url === state.selectedStation?.url;
+    const isPlaying = button.dataset.url === playingUrl;
+    button.classList.toggle("active", isSelected);
+
+    // Replace icon with playing bars or restore
+    const iconWrap = button.querySelector(".station-icon-wrap");
+    const existingBars = button.querySelector(".playing-bars");
+    if (isPlaying) {
+      if (!existingBars) {
+        const bars = document.createElement("div");
+        bars.className = "playing-bars";
+        bars.innerHTML = "<span></span><span></span><span></span>";
+        iconWrap.style.display = "none";
+        iconWrap.after(bars);
+      }
+    } else {
+      if (existingBars) {
+        existingBars.remove();
+        iconWrap.style.display = "";
+      }
+    }
   }
 }
 
