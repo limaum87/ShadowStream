@@ -148,6 +148,25 @@ def set_error(message):
         STATE["error"] = message
 
 
+def spotify_status():
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "raspotify"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+def spotify_set(enable):
+    action = "start" if enable else "stop"
+    subprocess.run(
+        ["sudo", "systemctl", action, "raspotify"],
+        capture_output=True, timeout=10,
+    )
+
+
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -155,6 +174,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return self.respond_json({"stations": load_stations()})
         if parsed.path == "/api/status":
             return self.respond_json(refresh_state())
+        if parsed.path == "/api/spotify":
+            return self.respond_json({"active": spotify_status()})
         if parsed.path == "/health":
             return self.respond_json({"status": "ok"})
         return self.serve_static(parsed.path)
@@ -220,6 +241,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                 stations.append({"name": name, "url": url})
                 save_stations(stations)
                 return self.respond_json(refresh_state())
+
+            if parsed.path == "/api/spotify":
+                enable = body.get("active", True)
+                spotify_set(enable)
+                return self.respond_json({"active": spotify_status()})
 
             if parsed.path == "/api/stations/delete":
                 url = body.get("url", "").strip()

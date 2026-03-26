@@ -25,6 +25,8 @@ const elements = {
   newName: document.querySelector("#new-station-name"),
   newUrl: document.querySelector("#new-station-url"),
   addStation: document.querySelector("#add-station"),
+  spotifyToggle: document.querySelector("#spotify-toggle"),
+  spotifyStatus: document.querySelector("#spotify-status"),
 };
 
 init().catch((error) => {
@@ -37,8 +39,9 @@ async function init() {
   bindEvents();
   await loadStations();
   await refreshStatus();
+  await refreshSpotify();
   window.setInterval(async () => {
-    try { await refreshStatus(); }
+    try { await refreshStatus(); await refreshSpotify(); }
     catch (error) { showError(error); }
   }, 5000);
 }
@@ -63,6 +66,20 @@ function bindEvents() {
   elements.volume.addEventListener("change", async (event) => {
     try { await postJson("/api/volume", { volume: Number(event.target.value) }); }
     catch (error) { showError(error); }
+  });
+  elements.spotifyToggle.addEventListener("click", async () => {
+    const isActive = elements.spotifyToggle.classList.contains("active");
+    try {
+      const res = await fetch("/api/spotify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !isActive }),
+      });
+      const data = await res.json();
+      updateSpotifyUI(data.active);
+    } catch (error) {
+      showError(error);
+    }
   });
   elements.addStation.addEventListener("click", async () => {
     const name = elements.newName.value.trim();
@@ -257,4 +274,17 @@ function setMessage(message) {
 
 function setStatus(status) {
   elements.statusPill.textContent = status;
+}
+
+async function refreshSpotify() {
+  try {
+    const res = await fetch("/api/spotify");
+    const data = await res.json();
+    updateSpotifyUI(data.active);
+  } catch { /* ignore */ }
+}
+
+function updateSpotifyUI(active) {
+  elements.spotifyToggle.classList.toggle("active", active);
+  elements.spotifyStatus.textContent = active ? "Ativo — visivel no Spotify" : "Desativado";
 }
