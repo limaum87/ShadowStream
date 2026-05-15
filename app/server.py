@@ -79,7 +79,7 @@ def ensure_mpv_running():
             stderr=subprocess.DEVNULL,
         )
 
-        deadline = time.time() + 30
+        deadline = time.time() + 120
         while time.time() < deadline:
             if Path(MPV_SOCKET).exists():
                 return
