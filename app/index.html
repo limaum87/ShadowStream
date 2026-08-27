@@ -9,101 +9,141 @@
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16x16.png">
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
     <link rel="manifest" href="./assets/icons/site.webmanifest">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&amp;family=Chakra+Petch:wght@500;600;700&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
 
-    <!-- Header -->
+    <div class="page-ambient" aria-hidden="true"></div>
+
     <header class="top-bar">
-      <div class="top-bar-left">
-        <span class="material-symbols-outlined icon-brand">graphic_eq</span>
-        <h1 class="brand">RADIO.OS</h1>
-      </div>
-      <div class="top-bar-right">
-        <span class="material-symbols-outlined icon-muted">sensors</span>
-        <span class="live-dot" id="live-dot"></span>
+      <div class="top-bar-inner">
+        <div class="top-bar-left">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="material-symbols-outlined icon-brand">graphic_eq</span>
+          </span>
+          <div>
+            <h1 class="brand">RADIO.OS</h1>
+            <p class="brand-subtitle">Raspberry receiver</p>
+          </div>
+        </div>
+        <div class="connection-status">
+          <span class="live-dot" id="live-dot"></span>
+          <span>Saida do Raspberry</span>
+        </div>
       </div>
     </header>
 
     <main class="app-shell">
-
-      <!-- Now Playing -->
-      <section class="now-playing-card">
-        <div class="np-inner">
-          <div class="np-info">
-            <p class="label-micro" id="status-pill">Parado</p>
-            <h2 class="np-title" id="current-station">Nenhuma estacao selecionada</h2>
-            <p class="np-meta label-micro" id="stream-meta">--</p>
-          </div>
-
-          <!-- Controls -->
-          <div class="controls-row">
-            <button id="stop" class="ctrl-btn" type="button" title="Parar">
-              <span class="material-symbols-outlined">stop</span>
-            </button>
-            <button id="play-selected" class="ctrl-btn ctrl-play" type="button" title="Tocar">
-              <span class="material-symbols-outlined filled">play_arrow</span>
-            </button>
-            <button id="pause" class="ctrl-btn" type="button" title="Pausar">
-              <span class="material-symbols-outlined">pause</span>
-            </button>
-            <button id="resume" class="ctrl-btn" type="button" title="Retomar" style="display:none">
-              <span class="material-symbols-outlined filled">play_arrow</span>
-            </button>
-          </div>
-
-          <!-- Volume -->
-          <div class="volume-row">
-            <span class="material-symbols-outlined icon-muted vol-icon">volume_down</span>
-            <div class="volume-track-wrapper">
-              <input id="volume" type="range" min="0" max="100" step="1" value="80">
-            </div>
-            <span class="material-symbols-outlined icon-primary vol-icon">volume_up</span>
-          </div>
+      <aside class="control-deck">
+        <div class="deck-heading">
+          <p class="eyebrow">Controle remoto</p>
+          <p class="deck-number">01</p>
         </div>
-        <div class="np-glow"></div>
-      </section>
 
-      <!-- Message -->
-      <p id="message" class="message" role="status">Carregando lista de estacoes...</p>
+        <section class="now-playing-card">
+          <div class="np-inner">
+            <div class="receiver-display">
+              <div class="signal-visual" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="np-info">
+                <p class="label-micro" id="status-pill">Parado</p>
+                <h2 class="np-title" id="current-station">Nenhuma estacao selecionada</h2>
+                <p class="np-meta label-micro" id="stream-meta">--</p>
+              </div>
+            </div>
 
-      <!-- Spotify Connect -->
-      <section class="spotify-card">
-        <div class="spotify-row">
-          <div class="spotify-info">
-            <span class="material-symbols-outlined spotify-icon">headphones</span>
-            <div>
-              <p class="spotify-title">Spotify Connect</p>
-              <p class="spotify-sub" id="spotify-status">Verificando...</p>
+            <div class="controls-row" aria-label="Controles de reproducao">
+              <button id="stop" class="ctrl-btn" type="button" title="Parar" aria-label="Parar">
+                <span class="material-symbols-outlined">stop</span>
+              </button>
+              <button id="play-selected" class="ctrl-btn ctrl-play" type="button" title="Tocar" aria-label="Tocar estacao selecionada">
+                <span class="material-symbols-outlined filled">play_arrow</span>
+              </button>
+              <button id="pause" class="ctrl-btn" type="button" title="Pausar" aria-label="Pausar">
+                <span class="material-symbols-outlined">pause</span>
+              </button>
+              <button id="resume" class="ctrl-btn" type="button" title="Retomar" aria-label="Retomar" style="display:none">
+                <span class="material-symbols-outlined filled">play_arrow</span>
+              </button>
+            </div>
+
+            <div class="volume-block">
+              <div class="volume-label">
+                <span>Volume</span>
+                <output id="volume-value" for="volume">80%</output>
+              </div>
+              <div class="volume-row">
+                <span class="material-symbols-outlined icon-muted vol-icon">volume_down</span>
+                <div class="volume-track-wrapper">
+                  <input id="volume" type="range" min="0" max="100" step="1" value="80" aria-label="Volume">
+                </div>
+                <span class="material-symbols-outlined icon-primary vol-icon">volume_up</span>
+              </div>
             </div>
           </div>
-          <button id="spotify-toggle" class="spotify-toggle" type="button" title="Ligar/Desligar Spotify Connect">
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
-        <p class="spotify-hint">Quando ativo, o Raspberry aparece como "<strong>Raspberry Radio</strong>" no seu app do Spotify.</p>
-      </section>
+          <div class="np-glow"></div>
+        </section>
 
-      <!-- Station List -->
+        <p id="message" class="message" role="status">Carregando lista de estacoes...</p>
+
+        <section class="spotify-card">
+          <div class="spotify-row">
+            <div class="spotify-info">
+              <span class="spotify-badge">
+                <span class="material-symbols-outlined spotify-icon">headphones</span>
+              </span>
+              <div>
+                <p class="spotify-title">Spotify Connect</p>
+                <p class="spotify-sub" id="spotify-status">Verificando...</p>
+              </div>
+            </div>
+            <button id="spotify-toggle" class="spotify-toggle" type="button" title="Ligar/Desligar Spotify Connect" aria-label="Ligar ou desligar Spotify Connect">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <p class="spotify-hint">Ative e escolha <strong>Raspberry Radio</strong> nos dispositivos do Spotify.</p>
+        </section>
+      </aside>
+
       <section class="streams-section">
         <div class="streams-header">
-          <h3 class="section-title">Estacoes Disponiveis</h3>
-          <span class="station-count" id="station-count">0 online</span>
+          <div>
+            <p class="eyebrow">Sua sintonia</p>
+            <h2 class="section-title">Estacoes disponiveis</h2>
+          </div>
+          <span class="station-count" id="station-count">0 estacoes</span>
         </div>
         <div id="station-list" class="station-list"></div>
 
-        <!-- Add Station -->
-        <div class="add-station-form">
-          <input id="new-station-name" type="text" placeholder="Nome da estacao" class="glass-input">
-          <input id="new-station-url" type="text" placeholder="URL do stream" class="glass-input">
-          <button id="add-station" class="ctrl-btn ctrl-add" type="button" title="Adicionar">
-            <span class="material-symbols-outlined">add</span>
-          </button>
+        <div class="add-station-card">
+          <div class="add-station-heading">
+            <span class="material-symbols-outlined">add_circle</span>
+            <div>
+              <h3>Nova estacao</h3>
+              <p>Salve um novo endereco de streaming.</p>
+            </div>
+          </div>
+          <div class="add-station-form">
+            <label>
+              <span>Nome</span>
+              <input id="new-station-name" type="text" placeholder="Ex.: Radio Rock" class="glass-input">
+            </label>
+            <label class="url-field">
+              <span>URL do stream</span>
+              <input id="new-station-url" type="url" placeholder="https://..." class="glass-input">
+            </label>
+            <button id="add-station" class="add-station-button" type="button">
+              <span class="material-symbols-outlined">add</span>
+              <span>Adicionar</span>
+            </button>
+          </div>
         </div>
       </section>
-
     </main>
 
     <script src="./app.js" type="module"></script>

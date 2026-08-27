@@ -17,7 +17,9 @@ const elements = {
   stationCount: document.querySelector("#station-count"),
   streamMeta: document.querySelector("#stream-meta"),
   liveDot: document.querySelector("#live-dot"),
+  nowPlayingCard: document.querySelector(".now-playing-card"),
   volume: document.querySelector("#volume"),
+  volumeValue: document.querySelector("#volume-value"),
   playSelected: document.querySelector("#play-selected"),
   pause: document.querySelector("#pause"),
   resume: document.querySelector("#resume"),
@@ -67,6 +69,9 @@ function bindEvents() {
     try { await postJson("/api/volume", { volume: Number(event.target.value) }); }
     catch (error) { showError(error); }
   });
+  elements.volume.addEventListener("input", (event) => {
+    elements.volumeValue.textContent = `${event.target.value}%`;
+  });
   elements.spotifyToggle.addEventListener("click", async () => {
     const isActive = elements.spotifyToggle.classList.contains("active");
     try {
@@ -105,7 +110,7 @@ async function loadStations() {
   const payload = await response.json();
   state.stations = payload.stations ?? [];
   state.selectedStation = state.stations[0] ?? null;
-  elements.stationCount.textContent = `${state.stations.length} online`;
+  elements.stationCount.textContent = `${state.stations.length} ${state.stations.length === 1 ? "estacao" : "estacoes"}`;
   renderStations();
   if (state.selectedStation) {
     setMessage("Selecione uma estacao e envie para o Raspberry.");
@@ -188,6 +193,7 @@ async function refreshStatus() {
 function applyRemoteState(payload) {
   state.remote = payload;
   elements.volume.value = String(payload.volume ?? 80);
+  elements.volumeValue.textContent = `${payload.volume ?? 80}%`;
 
   if (payload.current_station) {
     elements.currentStation.textContent = payload.current_station.name;
@@ -205,6 +211,9 @@ function applyRemoteState(payload) {
 
   const isPlaying = payload.playing;
   elements.liveDot.classList.toggle("inactive", !isPlaying);
+  elements.nowPlayingCard.classList.toggle("is-playing", isPlaying);
+  elements.pause.style.display = isPlaying ? "grid" : "none";
+  elements.resume.style.display = !isPlaying && payload.current_station ? "grid" : "none";
 
   // Update active station in list with playing bars
   syncStationButtons();
