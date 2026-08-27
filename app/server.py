@@ -1,4 +1,5 @@
 import json
+import logging
 import mimetypes
 import os
 import socket
@@ -16,12 +17,20 @@ STATIONS_PATH = BASE_DIR / "stations.json"
 PORT = int(os.environ.get("PORT", "10000"))
 MPV_SOCKET = os.environ.get("MPV_SOCKET", "/tmp/mpv.sock")
 MPV_AUDIO_DEVICE = os.environ.get("MPV_AUDIO_DEVICE", "auto")
+RECONNECT_INTERVAL = max(5, int(os.environ.get("RECONNECT_INTERVAL", "10")))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+LOGGER = logging.getLogger("radio")
 
 STATE = {
     "current_station": None,
     "playing": False,
     "volume": 80,
     "error": None,
+    "auto_reconnect": False,
 }
 STATE_LOCK = threading.Lock()
 MPV_PROCESS = None
@@ -67,6 +76,7 @@ def ensure_mpv_running():
             "--no-terminal",
             f"--input-ipc-server={MPV_SOCKET}",
             "--keep-open=no",
+            "--stream-lavf-o=reconnect=1,reconnect_at_eof=1,reconnect_streamed=1,reconnect_delay_max=10",
             "--force-window=no",
             "--audio-display=no",
             f"--audio-device={MPV_AUDIO_DEVICE}",
@@ -76,8 +86,9 @@ def ensure_mpv_running():
         MPV_PROCESS = subprocess.Popen(
             command,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=None,
         )
+        LOGGER.info("started mpv pid=%s", MPV_PROCESS.pid)
 
         deadline = time.time() + 120
         while time.time() < deadline:
@@ -123,12 +134,10 @@ def refresh_state():
             matched_station = get_station_by_url(filename)
             if matched_station:
                 STATE["current_station"] = matched_station
-        elif idle:
-            STATE["current_station"] = None
         STATE["playing"] = bool(filename) and not bool(pause) and not bool(idle)
         if isinstance(volume, (int, float)):
             STATE["volume"] = max(0, min(100, int(volume)))
-        if error and (STATE["playing"] or idle):
+        if error and STATE["playing"]:
             STATE["error"] = None
     return snapshot_state()
 
@@ -146,6 +155,47 @@ def snapshot_state():
 def set_error(message):
     with STATE_LOCK:
         STATE["error"] = message
+
+
+def play_station(station, *, reconnect=False):
+    mpv_command(["loadfile", station["url"], "replace"])
+    mpv_command(["set_property", "pause", False])
+    with STATE_LOCK:
+        STATE["current_station"] = station
+        STATE["auto_reconnect"] = True
+        STATE["error"] = None
+    LOGGER.info("%s station: %s (%s)", "reconnected" if reconnect else "playing", station["name"], station["url"])
+
+
+def reconnect_loop():
+    """Reload the selected station after mpv reaches EOF or loses the stream."""
+    while True:
+        time.sleep(RECONNECT_INTERVAL)
+        with STATE_LOCK:
+            station = STATE["current_station"]
+            reconnect_enabled = STATE["auto_reconnect"]
+
+        if not reconnect_enabled or not station:
+            continue
+
+        try:
+            paused = mpv_command(["get_property", "pause"]).get("data")
+            idle = mpv_command(["get_property", "idle-active"]).get("data")
+        except Exception as exc:
+            LOGGER.warning("could not inspect mpv for reconnect: %s", exc)
+            continue
+
+        # A manual pause must remain paused.  An idle player means the stream
+        # ended or disconnected, so reload the last station.
+        if paused or not idle:
+            continue
+
+        LOGGER.warning("stream ended or disconnected; reconnecting %s", station["name"])
+        try:
+            play_station(station, reconnect=True)
+        except Exception as exc:
+            set_error(f"reconnect failed: {exc}")
+            LOGGER.exception("failed to reconnect %s", station["name"])
 
 
 def spotify_status():
@@ -195,11 +245,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 station = get_station_by_url(url)
                 if not station:
                     return self.respond_json({"error": "unknown station"}, HTTPStatus.BAD_REQUEST)
-                mpv_command(["loadfile", station["url"], "replace"])
-                mpv_command(["set_property", "pause", False])
-                with STATE_LOCK:
-                    STATE["current_station"] = station
-                    STATE["error"] = None
+                play_station(station)
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/pause":
@@ -218,6 +264,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     STATE["current_station"] = None
                     STATE["playing"] = False
                     STATE["error"] = None
+                    STATE["auto_reconnect"] = False
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/volume":
@@ -292,5 +339,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     ensure_mpv_running()
+    threading.Thread(target=reconnect_loop, name="stream-reconnect", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), RequestHandler)
     server.serve_forever()
