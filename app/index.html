@@ -61,7 +61,7 @@
               <button id="stop" class="ctrl-btn" type="button" title="Parar" aria-label="Parar">
                 <span class="material-symbols-outlined">stop</span>
               </button>
-              <button id="play-selected" class="ctrl-btn ctrl-play" type="button" title="Tocar" aria-label="Tocar estacao selecionada">
+              <button id="play-selected" class="ctrl-btn ctrl-play" type="button" title="Tocar" aria-label="Tocar">
                 <span class="material-symbols-outlined filled">play_arrow</span>
               </button>
               <button id="pause" class="ctrl-btn" type="button" title="Pausar" aria-label="Pausar">
@@ -114,9 +114,9 @@
         <div class="streams-header">
           <div>
             <p class="eyebrow">Sua sintonia</p>
-            <h2 class="section-title">Estacoes disponiveis</h2>
+            <h2 class="section-title">Rádios e playlists</h2>
           </div>
-          <span class="station-count" id="station-count">0 estacoes</span>
+          <span class="station-count" id="station-count">0 entradas</span>
         </div>
         <div id="station-list" class="station-list"></div>
 
@@ -124,8 +124,8 @@
           <div class="add-station-heading">
             <span class="material-symbols-outlined">add_circle</span>
             <div>
-              <h3>Nova estacao</h3>
-              <p>Salve um novo endereco de streaming.</p>
+              <h3>Adicionar rádio ou playlist</h3>
+              <p>Cole o link de uma rádio ou de uma playlist pública do YouTube.</p>
             </div>
           </div>
           <div class="add-station-form">
@@ -134,11 +134,11 @@
               <input id="new-station-name" type="text" placeholder="Ex.: Radio Rock" class="glass-input">
             </label>
             <label class="url-field">
-              <span>URL do stream</span>
+              <span>Link da rádio ou playlist</span>
               <input id="new-station-url" type="url" placeholder="https://..." class="glass-input">
             </label>
             <button id="add-station" class="add-station-button" type="button">
-              <span class="material-symbols-outlined">add</span>
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
               <span>Adicionar</span>
             </button>
           </div>

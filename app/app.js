@@ -90,7 +90,7 @@ function bindEvents() {
     const name = elements.newName.value.trim();
     const url = elements.newUrl.value.trim();
     if (!name || !url) {
-      setMessage("Preencha o nome e a URL da estacao.");
+      setMessage("Preencha o nome e o link.");
       return;
     }
     try {
@@ -98,7 +98,7 @@ function bindEvents() {
       elements.newName.value = "";
       elements.newUrl.value = "";
       await loadStations();
-      setMessage(`Estacao "${name}" adicionada.`);
+      setMessage(`"${name}" foi adicionada.`);
     } catch (error) {
       showError(error);
     }
@@ -110,13 +110,13 @@ async function loadStations() {
   const payload = await response.json();
   state.stations = payload.stations ?? [];
   state.selectedStation = state.stations[0] ?? null;
-  elements.stationCount.textContent = `${state.stations.length} ${state.stations.length === 1 ? "estacao" : "estacoes"}`;
+  elements.stationCount.textContent = `${state.stations.length} ${state.stations.length === 1 ? "entrada" : "entradas"}`;
   renderStations();
   if (state.selectedStation) {
-    setMessage("Selecione uma estacao e envie para o Raspberry.");
+    setMessage("Selecione uma rádio ou playlist para tocar no Raspberry.");
     setStatus("Pronto");
   } else {
-    setMessage("Nenhuma estacao configurada. Adicione uma abaixo.");
+    setMessage("Adicione uma rádio ou playlist abaixo.");
     setStatus("Vazio");
   }
 }
@@ -134,7 +134,7 @@ function renderStations() {
     iconWrap.className = "station-icon-wrap";
     const icon = document.createElement("span");
     icon.className = "material-symbols-outlined";
-    icon.textContent = "radio";
+    icon.textContent = station.type === "youtube_playlist" ? "playlist_play" : "radio";
     iconWrap.appendChild(icon);
 
     // Text
@@ -155,13 +155,13 @@ function renderStations() {
     removeIcon.className = "material-symbols-outlined";
     removeIcon.textContent = "close";
     removeBtn.appendChild(removeIcon);
-    removeBtn.title = "Remover estacao";
+    removeBtn.title = `Remover ${station.name}`;
     removeBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       try {
         await postJson("/api/stations/delete", { url: station.url });
         await loadStations();
-        setMessage(`Estacao "${station.name}" removida.`);
+        setMessage(`"${station.name}" foi removida.`);
       } catch (error) {
         showError(error);
       }
@@ -192,36 +192,37 @@ async function refreshStatus() {
 
 function applyRemoteState(payload) {
   state.remote = payload;
+  const isPlaylist = payload.current_station?.type === "youtube_playlist";
   elements.volume.value = String(payload.volume ?? 80);
   elements.volumeValue.textContent = `${payload.volume ?? 80}%`;
 
   if (payload.current_station) {
     elements.currentStation.textContent = payload.current_station.name;
-    elements.streamMeta.textContent = "Streaming";
+    elements.streamMeta.textContent = isPlaylist ? "Playlist do YouTube" : "Streaming";
   } else {
     elements.currentStation.textContent = "Nenhuma estacao selecionada";
     elements.streamMeta.textContent = "--";
-  }
-
-  if (payload.error) {
-    setMessage(`Erro no player: ${payload.error}`);
-    setStatus("Erro");
-    return;
   }
 
   const isPlaying = payload.playing;
   elements.liveDot.classList.toggle("inactive", !isPlaying);
   elements.nowPlayingCard.classList.toggle("is-playing", isPlaying);
   elements.pause.style.display = isPlaying ? "grid" : "none";
-  elements.resume.style.display = !isPlaying && payload.current_station ? "grid" : "none";
+  elements.resume.style.display = !isPlaying && !payload.loading && payload.current_station ? "grid" : "none";
 
   // Update active station in list with playing bars
   syncStationButtons();
 
-  if (isPlaying) {
+  if (payload.error) {
+    setMessage(`Erro no player: ${payload.error}`);
+    setStatus("Erro");
+  } else if (payload.loading) {
+    setMessage(`Carregando ${payload.current_station.name} no Raspberry.`);
+    setStatus("Carregando");
+  } else if (isPlaying) {
     setMessage(`Tocando ${payload.current_station?.name ?? "stream"} na saida do Raspberry.`);
-    setStatus("Ao Vivo");
-    elements.streamMeta.textContent = "Streaming ao vivo";
+    setStatus(isPlaylist ? "Tocando" : "Ao Vivo");
+    if (!isPlaylist) elements.streamMeta.textContent = "Streaming ao vivo";
   } else if (payload.current_station) {
     setMessage(`${payload.current_station.name} pausada.`);
     setStatus("Pausado");

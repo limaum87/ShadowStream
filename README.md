@@ -2,7 +2,7 @@
 
 Web UI para controlar reproducao de audio em um Raspberry Pi. O navegador e apenas um controle remoto — o som sai pela saida de audio do Raspberry.
 
-Inclui suporte a **radios/streams online** (via mpv) e **Spotify Connect** (via raspotify/librespot).
+Inclui suporte a **rádios online**, **playlists públicas do YouTube** (via mpv) e **Spotify Connect** (via raspotify/librespot).
 
 ## Requisitos
 
@@ -102,6 +102,25 @@ Abra `http://IP_DO_RASPBERRY:10000` de qualquer dispositivo na rede.
 - Abra o Spotify no celular/PC
 - Selecione **"Raspberry Radio"** como dispositivo de reproducao
 - Controle a musica normalmente pelo app do Spotify
+
+### Playlists do YouTube
+
+Em **Adicionar rádio ou playlist**, informe um nome e cole o link da playlist pública do YouTube (`https://www.youtube.com/playlist?list=...`). Selecione-a e clique em **Tocar**. As faixas avançam automaticamente, e o áudio sai pelo Raspberry.
+
+Para um Mix do YouTube, cole o link do vídeo aberto dentro do Mix. A rádio carrega até 20 faixas por Mix para limitar o tempo de espera no Raspberry.
+
+A imagem Docker já inclui `yt-dlp` e QuickJS. Para uma instalação via `systemd`, use Python 3.11 ou mais recente para o `yt-dlp` e instale os componentes EJS. O executável `yt-dlp` deve estar no `PATH` do serviço. Por exemplo:
+
+```bash
+sudo apt-get install -y python3-venv
+sudo python3 -m venv /opt/yt-dlp
+sudo /opt/yt-dlp/bin/pip install -U yt-dlp yt-dlp-ejs
+sudo ln -s /opt/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp
+```
+
+Instale um [runtime JavaScript compatível com o `yt-dlp`](https://github.com/yt-dlp/yt-dlp/wiki/EJS#supported-javascript-runtimes). Com QuickJS instalado e `qjs` no `PATH` do serviço, adicione `--js-runtimes quickjs` a `/etc/yt-dlp.conf`. Com Deno, o `yt-dlp` detecta o executável por padrão. Depois de copiar os arquivos da aplicação, reinicie `radio.service`.
+
+Com `mpv` 0.32, disponibilize também o executável como `youtube-dl` no `PATH` do serviço, pois essa versão procura o extrator por esse nome.
 
 ## Comandos uteis
 

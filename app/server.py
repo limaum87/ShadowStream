@@ -2,6 +2,8 @@ import json
 import logging
 import mimetypes
 import os
+import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -9,7 +11,7 @@ import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR
@@ -18,6 +20,13 @@ PORT = int(os.environ.get("PORT", "10000"))
 MPV_SOCKET = os.environ.get("MPV_SOCKET", "/tmp/mpv.sock")
 MPV_AUDIO_DEVICE = os.environ.get("MPV_AUDIO_DEVICE", "auto")
 RECONNECT_INTERVAL = max(5, int(os.environ.get("RECONNECT_INTERVAL", "10")))
+STREAM_RECONNECT_OPTIONS = {
+    "reconnect": "1",
+    "reconnect_at_eof": "1",
+    "reconnect_streamed": "1",
+    "reconnect_delay_max": "10",
+}
+YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,10 +40,40 @@ STATE = {
     "volume": 80,
     "error": None,
     "auto_reconnect": False,
+    "loading": False,
+    "playlist_started": False,
 }
-STATE_LOCK = threading.Lock()
+STATE_LOCK = threading.RLock()
 MPV_PROCESS = None
 MPV_PROCESS_LOCK = threading.Lock()
+
+
+def youtube_playlist_url(url):
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname not in YOUTUBE_HOSTS:
+            return None
+    except ValueError:
+        return None
+
+    query = parse_qs(parsed.query)
+    ids = query.get("list", [])
+    if len(ids) != 1 or not re.fullmatch(r"[A-Za-z0-9_-]+", ids[0]):
+        return None
+
+    playlist_id = ids[0]
+    if playlist_id.startswith("RD"):
+        video_id = query.get("v", [""])[0]
+        if parsed.hostname == "youtu.be":
+            video_id = parsed.path.lstrip("/")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            # A Mix saved as a playlist URL may still encode its seed video in the list ID.
+            seed = re.fullmatch(r"RD([A-Za-z0-9_-]{11})", playlist_id)
+            video_id = seed.group(1) if seed else ""
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+
+    return f"https://www.youtube.com/playlist?list={playlist_id}"
 
 
 def load_stations():
@@ -43,13 +82,17 @@ def load_stations():
     stations = []
     for item in data:
         if isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("url"), str):
-            stations.append({"name": item["name"], "url": item["url"]})
+            station = {"name": item["name"], "url": item["url"]}
+            if youtube_playlist_url(station["url"]):
+                station["type"] = "youtube_playlist"
+            stations.append(station)
     return stations
 
 
 def save_stations(stations):
     with STATIONS_PATH.open("w", encoding="utf-8") as file:
-        json.dump(stations, file, ensure_ascii=False, indent=2)
+        entries = [{"name": station["name"], "url": station["url"]} for station in stations]
+        json.dump(entries, file, ensure_ascii=False, indent=2)
 
 
 def get_station_by_url(url):
@@ -76,9 +119,8 @@ def ensure_mpv_running():
             "--no-terminal",
             f"--input-ipc-server={MPV_SOCKET}",
             "--keep-open=no",
-            "--stream-lavf-o=reconnect=1,reconnect_at_eof=1,reconnect_streamed=1,reconnect_delay_max=10",
             "--force-window=no",
-            "--audio-display=no",
+            "--vid=no",
             f"--audio-device={MPV_AUDIO_DEVICE}",
             "--volume=80",
         ]
@@ -103,43 +145,58 @@ def ensure_mpv_running():
 
 def mpv_command(command):
     ensure_mpv_running()
-    payload = json.dumps({"command": command}).encode("utf-8") + b"\n"
+    payload = json.dumps({"command": command, "request_id": 1}).encode("utf-8") + b"\n"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(3)
         client.connect(MPV_SOCKET)
         client.sendall(payload)
-        response = client.recv(65536)
-    if not response:
-        raise RuntimeError("mpv returned no response")
-    return json.loads(response.decode("utf-8"))
+        with client.makefile("rb") as responses:
+            for line in responses:
+                response = json.loads(line)
+                if response.get("request_id") == 1:
+                    return response
+    raise RuntimeError("mpv returned no response")
+
+
+def mpv_control(command):
+    response = mpv_command(command)
+    if response.get("error") != "success":
+        raise RuntimeError(f"mpv: {response.get('error')}")
 
 
 def refresh_state():
     with STATE_LOCK:
-        error = STATE["error"]
-
-    try:
-        pause = mpv_command(["get_property", "pause"]).get("data")
-        volume = mpv_command(["get_property", "volume"]).get("data")
-        filename = mpv_command(["get_property", "filename"]).get("data")
-        idle = mpv_command(["get_property", "idle-active"]).get("data")
-    except Exception as exc:
-        with STATE_LOCK:
+        try:
+            pause = mpv_command(["get_property", "pause"]).get("data")
+            volume = mpv_command(["get_property", "volume"]).get("data")
+            idle = mpv_command(["get_property", "idle-active"]).get("data")
+            station = STATE["current_station"]
+            if station and station.get("type") == "youtube_playlist":
+                position = mpv_command(["get_property", "playlist-pos"]).get("data")
+                audio = mpv_command(["get_property", "audio-params"]).get("data")
+                # Older mpv versions report an unavailable position instead of -1 at EOF.
+                if idle and position in (None, -1):
+                    STATE["current_station"] = None
+                    if not STATE["playlist_started"]:
+                        STATE["error"] = "Não foi possível reproduzir a playlist do YouTube."
+                    STATE["loading"] = False
+                else:
+                    STATE["playlist_started"] = STATE["playlist_started"] or bool(audio)
+                    STATE["loading"] = not audio and not pause
+                STATE["playing"] = bool(audio) and not pause and not idle
+            else:
+                filename = mpv_command(["get_property", "filename"]).get("data")
+                STATE["playing"] = bool(filename) and not pause and not idle
+        except Exception as exc:
             STATE["playing"] = False
             STATE["error"] = str(exc)
-        return snapshot_state()
+            return snapshot_state()
 
-    with STATE_LOCK:
-        if filename:
-            matched_station = get_station_by_url(filename)
-            if matched_station:
-                STATE["current_station"] = matched_station
-        STATE["playing"] = bool(filename) and not bool(pause) and not bool(idle)
         if isinstance(volume, (int, float)):
             STATE["volume"] = max(0, min(100, int(volume)))
-        if error and STATE["playing"]:
+        if STATE["playing"]:
             STATE["error"] = None
-    return snapshot_state()
+        return snapshot_state()
 
 
 def snapshot_state():
@@ -147,6 +204,7 @@ def snapshot_state():
         return {
             "current_station": STATE["current_station"],
             "playing": STATE["playing"],
+            "loading": STATE["loading"],
             "volume": STATE["volume"],
             "error": STATE["error"],
         }
@@ -158,11 +216,28 @@ def set_error(message):
 
 
 def play_station(station, *, reconnect=False):
-    mpv_command(["loadfile", station["url"], "replace"])
-    mpv_command(["set_property", "pause", False])
+    playlist_url = youtube_playlist_url(station["url"])
+    if playlist_url and not shutil.which("yt-dlp"):
+        raise RuntimeError("Instale o yt-dlp para reproduzir playlists do YouTube.")
+
     with STATE_LOCK:
+        # HTTP EOF is normal for a track and must advance the playlist.
+        stream_options = {} if playlist_url else STREAM_RECONNECT_OPTIONS
+        mpv_control(["set_property", "stream-lavf-o", stream_options])
+        ytdl_options = {}
+        if playlist_url:
+            ytdl_options["yes-playlist"] = ""
+            if urlparse(playlist_url).path == "/watch":
+                # Generated mixes can contain hundreds of recommendations.
+                ytdl_options["playlist-end"] = "20"
+        mpv_control(["set_property", "ytdl-raw-options", ytdl_options])
+        url = f"ytdl://{playlist_url}" if playlist_url else station["url"]
+        mpv_control(["loadfile", url, "replace"])
+        mpv_control(["set_property", "pause", False])
         STATE["current_station"] = station
-        STATE["auto_reconnect"] = True
+        STATE["auto_reconnect"] = not playlist_url
+        STATE["loading"] = bool(playlist_url)
+        STATE["playlist_started"] = False
         STATE["error"] = None
     LOGGER.info("%s station: %s (%s)", "reconnected" if reconnect else "playing", station["name"], station["url"])
 
@@ -173,29 +248,18 @@ def reconnect_loop():
         time.sleep(RECONNECT_INTERVAL)
         with STATE_LOCK:
             station = STATE["current_station"]
-            reconnect_enabled = STATE["auto_reconnect"]
+            if not STATE["auto_reconnect"] or not station:
+                continue
 
-        if not reconnect_enabled or not station:
-            continue
-
-        try:
-            paused = mpv_command(["get_property", "pause"]).get("data")
-            idle = mpv_command(["get_property", "idle-active"]).get("data")
-        except Exception as exc:
-            LOGGER.warning("could not inspect mpv for reconnect: %s", exc)
-            continue
-
-        # A manual pause must remain paused.  An idle player means the stream
-        # ended or disconnected, so reload the last station.
-        if paused or not idle:
-            continue
-
-        LOGGER.warning("stream ended or disconnected; reconnecting %s", station["name"])
-        try:
-            play_station(station, reconnect=True)
-        except Exception as exc:
-            set_error(f"reconnect failed: {exc}")
-            LOGGER.exception("failed to reconnect %s", station["name"])
+            try:
+                paused = mpv_command(["get_property", "pause"]).get("data")
+                idle = mpv_command(["get_property", "idle-active"]).get("data")
+                if not paused and idle:
+                    LOGGER.warning("stream ended or disconnected; reconnecting %s", station["name"])
+                    play_station(station, reconnect=True)
+            except Exception as exc:
+                set_error(f"reconnect failed: {exc}")
+                LOGGER.exception("failed to reconnect %s", station["name"])
 
 
 def spotify_status():
@@ -249,22 +313,25 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/pause":
-                mpv_command(["set_property", "pause", True])
+                with STATE_LOCK:
+                    mpv_control(["set_property", "pause", True])
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/resume":
-                if not snapshot_state()["current_station"]:
-                    return self.respond_json({"error": "no station selected"}, HTTPStatus.BAD_REQUEST)
-                mpv_command(["set_property", "pause", False])
+                with STATE_LOCK:
+                    if not STATE["current_station"]:
+                        return self.respond_json({"error": "no station selected"}, HTTPStatus.BAD_REQUEST)
+                    mpv_control(["set_property", "pause", False])
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/stop":
-                mpv_command(["stop"])
                 with STATE_LOCK:
+                    mpv_control(["stop"])
                     STATE["current_station"] = None
                     STATE["playing"] = False
                     STATE["error"] = None
                     STATE["auto_reconnect"] = False
+                    STATE["loading"] = False
                 return self.respond_json(refresh_state())
 
             if parsed.path == "/api/volume":
@@ -282,8 +349,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 url = body.get("url", "").strip()
                 if not name or not url:
                     return self.respond_json({"error": "name and url required"}, HTTPStatus.BAD_REQUEST)
+                playlist_url = youtube_playlist_url(url)
+                url = playlist_url or url
                 stations = load_stations()
-                if any(s["url"] == url for s in stations):
+                if any(s["url"] == url or (playlist_url and youtube_playlist_url(s["url"]) == playlist_url) for s in stations):
                     return self.respond_json({"error": "station already exists"}, HTTPStatus.CONFLICT)
                 stations.append({"name": name, "url": url})
                 save_stations(stations)
